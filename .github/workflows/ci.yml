@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: Install dev dependencies
+        run: uv sync --group dev --frozen
+      - name: Run ruff check
+        run: uv run ruff check .
+      - name: Run ruff format check
+        run: uv run ruff format --check .
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: app
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: uv sync --group dev --frozen
+      - name: Run migrations
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.development
+          DB_HOST: localhost
+          DB_NAME: app
+          DB_USER: app
+          DB_PASSWORD: password
+        run: uv run python manage.py migrate
+      - name: Run tests
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.development
+          DB_HOST: localhost
+          DB_NAME: app
+          DB_USER: app
+          DB_PASSWORD: password
+        run: uv run python manage.py test
